@@ -1,6 +1,6 @@
 # guardians discipline — per-surface fences
 
-Modeled on Exa's per-component GUARDIAN.md pattern: each gm surface gets a fenced guardian with named scope, rules, and severity. A change touching a surface reads its guardian first. A guardian's rules are enforced by its checker where one exists, and by review where one does not.
+Modeled on the's per-component GUARDIAN.md pattern: each gm surface gets a fenced guardian with named scope, rules, and severity. A change touching a surface reads its guardian first. A guardian's rules are enforced by its checker where one exists, and by review where one does not.
 
 ## Surfaces and rules
 
