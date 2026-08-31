@@ -1,6 +1,6 @@
 [submodule "rs-plugkit"]
 	path = rs-plugkit
-	url = https://github.com/AnEntrypoint/rs-plugkit.git
+	url = https://github.com/dywongcloud/rs-plugkit.git
 	branch = main
 	ignore = dirty
 [submodule "rs-codeinsight"]
