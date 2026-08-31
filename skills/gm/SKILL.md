@@ -61,6 +61,17 @@ of the out-file, never a blind sleep, never a death declaration.
 `dispatch_orphaned` = bare re-dispatch once `ts` is fresh; changing `sweeping_pid`
 is a respawn, not a stuck loop.
 
+**Instruction/prose version pinning (availability-driven refresh).** A session
+pins the served graph/instruction version it booted with (the
+`.gm/exec-spool/.status.json` content hash at boot) and treats that version as
+its authority for the whole walk. Mid-session prose/config changes are NOT
+picked up ad hoc; they land only at a phase boundary or a fresh session boot
+(a new boot probe re-pins). This kills mid-walk drift: two adjacent dispatches
+can never observe two different versions of the same gate's prose. When the
+daemon reports a config change (config-notify), finish the current phase's
+in-flight dispatches against the pinned version, then re-pin at the next
+`transition`.
+
 The verb set belongs to the running build, not this file. An unrecognized verb is
 silently queued with no response, so a missing out-file after a normal read cycle
 means unavailable: fall back, never retry blindly. Where served (per the brick
@@ -241,6 +252,18 @@ independent PRD rows becomes parallel `Agent` dispatches (Section 1's "use gm
 too" rule binds every one of them), combined with JIT-batched harness calls
 (Section 1) for whatever stays in this session. Batch and parallelize to
 minimize wall-clock, not tool-call count.
+
+**Fan-out completion is quorum-gated, never wait-for-all (adaptive straggler
+cutoff).** When N>3 parallel dispatches run, completion does not wait for the
+slowest sibling: once enough dispatches have returned to cover the batch's
+scope (every PRD row claimed by at least one completed dispatch) AND a quorum
+fraction (default 3/4) have returned, arm a straggler deadline of 0.5x the
+slowest completed dispatch's wall-clock. Dispatches still pending at the
+deadline are abandoned as stragglers and their rows re-queue into the sweep
+(M_SWEEP) rather than being silently dropped. The cutoff never arms while
+coverage is short — a batch whose results live only in slow dispatches is
+never truncated by fast empty ones. Record the cutoff in the turn-summary so
+the sweep sees the re-queued rows.
 
 **A shared recurring transform gets one reviewed mapping before fan-out, not N
 independent interpretations.** When the closure's rows apply the SAME KIND of

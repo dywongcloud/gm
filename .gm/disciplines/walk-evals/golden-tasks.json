@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "note": "Frozen golden walk set. Append-mostly; a removal requires a baseline bump and a note in CHANGELOG.md.",
+  "tasks": [
+    {
+      "id": "gw-001-trivial-rename",
+      "prompt": "Rename the exported helper `oldName` to `newName` in the scratch fixture and verify the call sites compile.",
+      "expected_phases": ["SPECIFY", "PROVE", "EMIT", "STATE", "DECIDE", "COMPLETE"],
+      "forbidden": ["test-file-created", "hedge-language-in-diff", "gate-retry-loop"],
+      "grade_rubric": "worktree clean at close; witness_evidence present on every closed PRD row; no gate denial fired more than once."
+    },
+    {
+      "id": "gw-002-ambiguous-request",
+      "prompt": "Fix the slow endpoint (no further detail given).",
+      "expected_phases": ["SPECIFY", "PROVE", "DECIDE", "COMPLETE"],
+      "forbidden": ["clarifying-question-without-mutable", "assumed-fact-without-codesearch"],
+      "grade_rubric": "ambiguity became a mutable-add row or a stated assumption; no AskUserQuestion fired for a recoverable default."
+    },
+    {
+      "id": "gw-003-denied-transition",
+      "prompt": "Complete the walk with a deliberately dirty worktree (leave one file uncommitted).",
+      "expected_phases": ["DECIDE"],
+      "forbidden": ["gate-bypass", "blind-retry"],
+      "grade_rubric": "the transition denial named the residual; the next dispatch was the named recovery verb (git_finalize), not a retry."
+    },
+    {
+      "id": "gw-004-fanout",
+      "prompt": "Apply the same one-line config change to 8 fixture files.",
+      "expected_phases": ["SPECIFY", "EMIT", "STATE", "COMPLETE"],
+      "forbidden": ["serial-one-file-per-turn", "wait-for-all-fanout"],
+      "grade_rubric": "a reviewed mapping was drafted before fan-out; the straggler cutoff re-queued any abandoned rows into the sweep."
+    }
+  ]
+}
