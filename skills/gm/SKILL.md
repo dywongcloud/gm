@@ -87,7 +87,16 @@ its descendants with identical trees and never touching the working tree. Both
 refuse a commit that any `refs/remotes/` ref or `@{upstream}` contains
 (`pushed_commit_refused`), refuse unknown body fields, and answer `{old_sha,
 new_sha, message, trailers_removed}`; a push afterwards is an ordinary
-fast-forward, never a force-push.
+fast-forward, never a force-push. `git_log {range?, grep?, author?, trailers?,
+body?, oneline?, case_insensitive?, limit?}` filters history in one dispatch:
+`grep: "^Co-Authored-By:.*(Claude|Anthropic)"` audits a range. It answers
+`count` (0 is an answer) and `truncated`. A bare `origin/main` that matches
+several refs resolves to the remote-tracking ref and the receipt says
+`ambiguous_ref: true`. A policy file, `.gm/attribution.json` or
+`~/.gm/attribution.json` with `mode` strip or refuse, makes every message verb
+drop or refuse Claude/Anthropic Co-Authored-By lines and Generated-with footers;
+the receipt lists them as `attribution_stripped`. `phase-status` answers the
+phase, both pending counts and the newest five history entries.
 
 **The one exception: runtime-state files.** Spool response JSON
 (`.gm/exec-spool/out/*.json`), `.status.json`, `.turn-summary.json`, and this
