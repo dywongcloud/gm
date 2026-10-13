@@ -80,6 +80,14 @@ via Bash, gated `deviation.bash-git-bypass`), `recall`, `fetch`, `exec_js`,
 `memorize-fire`, `prd-add`/`prd-resolve`/`mutable-add`/`mutable-resolve`,
 `transition`, `phase-status`, `filter`. `git_finalize {message}` bundles
 add->commit->porcelain-gate->push->CI-watch; where absent, compose it.
+`git_commit {amend: true, message, paths?}` rewrites HEAD (only the named
+pathspecs are folded in; no paths on a clean tree replaces the message alone)
+and `git_reword {rev?, message}` replaces one unpushed commit's message, rebuilding
+its descendants with identical trees and never touching the working tree. Both
+refuse a commit that any `refs/remotes/` ref or `@{upstream}` contains
+(`pushed_commit_refused`), refuse unknown body fields, and answer `{old_sha,
+new_sha, message, trailers_removed}`; a push afterwards is an ordinary
+fast-forward, never a force-push.
 
 **The one exception: runtime-state files.** Spool response JSON
 (`.gm/exec-spool/out/*.json`), `.status.json`, `.turn-summary.json`, and this
