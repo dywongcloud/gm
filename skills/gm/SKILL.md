@@ -96,7 +96,10 @@ several refs resolves to the remote-tracking ref and the receipt says
 `~/.gm/attribution.json` with `mode` strip or refuse, makes every message verb
 drop or refuse Claude/Anthropic Co-Authored-By lines and Generated-with footers;
 the receipt lists them as `attribution_stripped`. `phase-status` answers the
-phase, both pending counts and the newest five history entries.
+phase, both pending counts and the newest five history entries. `git_diff` and
+`git_show` take `name_only`, `name_status` and `max_chars`, and spill what they
+cut to a `spill_file`. `git_branch {delete}` removes a local branch only while
+HEAD or a remote-tracking ref still holds its tip; `{rename, to}` renames one.
 
 **The one exception: runtime-state files.** Spool response JSON
 (`.gm/exec-spool/out/*.json`), `.status.json`, `.turn-summary.json`, and this
