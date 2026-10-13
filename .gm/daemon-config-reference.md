@@ -14,11 +14,96 @@ behaves byte-identically to before this file existed.
   "registry_poll_interval_secs": 5,
   "heartbeat_interval_secs": 10,
   "plugin_update_poll_interval_secs": 600,
-  "runner_update_poll_interval_secs": 600
+  "runner_update_poll_interval_secs": 600,
+  "gm_pool_size": 8,
+  "exec_lane_slots": 2,
+  "read_lane_slots": 2,
+  "state_lane_slots": 2
 }
 ```
 
 `max_concurrent_projects`/`gm_concurrency`/`side_plugin_concurrency` are deliberately absent from this example: leaving them unset derives a default from this machine's own `std::thread::available_parallelism()` at every daemon boot, so the same config file behaves correctly on a 4-core box and a 64-core box. Set them explicitly only to override that host-derived default.
+
+## Dispatch lanes: claim budgets and reserved pool slots
+
+Every verb belongs to one of three lanes. The lane decides two independent
+capacities: how many claims of that lane one project may hold at once, and how
+many `gm` pool slots the lane can always reach.
+
+- `exec`: the exec family (`exec_js`, `bash`, `python`, every language stem,
+  `fetch`). A dispatch here holds its slot for its whole run, so this is the
+  lane a long child process lives in.
+- `read`: read-only verbs (`phase-status`, `prd-list`, `mutable-list`,
+  `git_status`, `git_log`, `git_diff`, `git_show`, `fs_read`, `fs_readdir`,
+  `fs_stat`, `grep`, `codesearch` in `literal`/`regex` mode, `callers`,
+  `callees`, `impact`, `codeinsight`, `recall`, `health`, `wait`, `filter`).
+- `state`: everything else: state-changing verbs (`instruction`,
+  `transition`, `prd-add`, `mutable-resolve`, the git mutations, `kv_put`) and
+  indexing (`codesearch` in `dual` mode, `embed`, `code_index`,
+  `memorize-fire`).
+
+The source of the lane membership is `dispatch_lane_for_verb` in
+`agentplug-host/src/registry.rs`; the daemon writes the same list into
+`.status.json` as `tool_serialization`.
+
+- **Claim budget per lane.** The claim pass admits up to
+  `MAX_CLAIMED_DISPATCHES_PER_PROJECT` (32) in-flight dispatches *per lane* for
+  one project. A flood of `state` tickets can exhaust the `state` budget and
+  never blocks the claim of an `exec` or `read` ticket. Inside one pass the
+  claim order is round-robin across session ids (the in-file stem before its
+  `-<pid>-<ts>-<counter>` suffix), oldest file first inside a session, and one
+  session may hold at most half of a lane's budget (16,
+  `claim_cap_per_session_lane`), so one session's flood never holds another
+  session's ticket unclaimed: the second session is claimed at once and, inside
+  the pool, takes the next freed slot of its lane ahead of the flooding
+  session's queued tickets.
+- `exec_lane_slots`, `read_lane_slots`, `state_lane_slots` (default: each
+  `max(1, gm_pool_size / 4)`, so 2/2/2 at the default pool of 8, 1/1/1 at a pool
+  of 4; every lane gets 0 when `gm_pool_size` is below 3) -- how many of the
+  `gm_pool_size` slots are reserved for that lane. A lane may use more than its
+  reservation only while the free slots left behind still cover the other
+  lanes' unused reservations, so a `state` flood can never hold the slots
+  reserved for `exec` and `read`, and a long `exec_js` can never hold the slots
+  reserved for `read` and `state`. The sum is clamped to `gm_pool_size`
+  (`gm_pool_size - 1` when any lane has 0, so a lane without a reservation can
+  still run). Inside a lane the next slot goes to the waiter whose project
+  holds the fewest slots in that lane, then whose session holds the fewest,
+  then the oldest arrival. The daemon logs the effective values at boot (`gm
+  lane slots: exec=.. read=.. state=..`). Changing them needs a daemon restart.
+- `MAX_CONCURRENT_HEAVY_DISPATCHES` (3) still caps heavy verbs across every
+  lane, and the git/store/state serial lanes still admit one writer per
+  project; the lanes above decide capacity, the serial lanes decide ordering.
+
+## What `.status.json` counts
+
+Every write of a project's `.gm/exec-spool/.status.json` recounts the spool;
+nothing in it is a lease that outlives the work it describes.
+
+- `queue_depth`, `queued_step_count`: settled in-files sitting unclaimed under
+  `in/<verb>/` of this project, counted by a readdir at write time.
+- `queue_position`: unclaimed in-files across every project this daemon serves
+  that are older than this project's oldest unclaimed one; 0 when this
+  project's head ticket is next.
+- `claimed_step_count`: `.inflight` claims on disk; `in_flight_count` and
+  `in_flight_by_lane`: claimed dispatches this process is executing or
+  waiting to execute, per lane.
+- `claim_pass_ts` / `claim_pass_age_ms`: when the claim pass last visited this
+  project. A growing age with `queue_depth > 0` is a stalled pass, not a busy
+  one.
+- `busy_until`: present only while `in_flight_count > 0` or `queue_depth > 0`,
+  renewed on every write (15 s lease), removed otherwise.
+- `project_queue_position` / `project_queue_depth`: this project's place in the
+  claim pass round-robin over active projects (the old meaning of
+  `queue_position`/`queue_depth`).
+- `gm_lane_slots`, `gm_lane_in_flight`, `gm_lane_waiting`, `claim_cap_per_lane`:
+  the lane capacities above and their live use, process-wide.
+- `runtime`: `agentplug` for the shared daemon, `agentplug-runner-standalone`
+  for the per-project fallback watcher. Both runtimes use the same claim pass
+  and the same status writer, so every field above means the same thing in
+  both.
+
+The status is rewritten the moment any of these counts changes (every claim
+and every answer), and at least every 5 s while the daemon serves the project.
 
 - `registry_poll_interval_secs` (default 5) -- how often the daemon re-reads
   `daemon-registry.txt` to notice newly-registered projects.
